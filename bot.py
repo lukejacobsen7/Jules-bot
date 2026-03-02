@@ -3,9 +3,10 @@ import subprocess
 import re
 import threading
 import logging
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,7 +15,6 @@ BOT_TOKEN = os.environ['BOT_TOKEN']
 ALLOWED_USER_ID = int(os.environ['TELEGRAM_USER_ID'])
 PORT = int(os.environ.get('PORT', 8080))
 
-# Configure repos via env var: "canvas-notify:lukejacobsen7/Canvas-notify,wemix:lukejacobsen7/WeMix1"
 REPOS_ENV = os.environ.get('JULES_REPOS', '')
 REPOS = {}
 for entry in REPOS_ENV.split(','):
@@ -54,6 +54,48 @@ class HealthHandler(BaseHTTPRequestHandler):
 def start_health_server():
     server = HTTPServer(('0.0.0.0', PORT), HealthHandler)
     server.serve_forever()
+
+
+async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+
+    await update.message.reply_text("Starting Jules auth — one sec...")
+
+    proc = await asyncio.create_subprocess_exec(
+        'jules', 'login', '--no-launch-browser',
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    output_lines = []
+    try:
+        async for line in proc.stdout:
+            line_str = line.decode().strip()
+            if line_str:
+                output_lines.append(line_str)
+            if any('http' in l or 'code' in l.lower() for l in output_lines) and len(output_lines) >= 2:
+                break
+    except Exception as e:
+        await update.message.reply_text(f"Error reading auth output: {e}")
+        return
+
+    if output_lines:
+        await update.message.reply_text(
+            "Open this URL and sign in with Google:\n\n" + '\n'.join(output_lines) +
+            "\n\nOnce authorized, Jules will authenticate automatically."
+        )
+    else:
+        await update.message.reply_text("No output — Jules may already be authenticated. Try sending a task.")
+        proc.kill()
+        return
+
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=120)
+        await update.message.reply_text("Jules is authenticated! Send me a task.")
+    except asyncio.TimeoutError:
+        proc.kill()
+        await update.message.reply_text("Auth timed out. Try /auth again.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,6 +155,7 @@ def main():
     logger.info(f"Health server on port {PORT}")
 
     app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler('auth', auth_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
