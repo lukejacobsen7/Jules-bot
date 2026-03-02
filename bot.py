@@ -22,6 +22,10 @@ for entry in REPOS_ENV.split(','):
         name, repo = entry.split(':', 1)
         REPOS[name.strip()] = repo.strip()
 
+# Auth state
+auth_proc = None
+waiting_for_code = False
+
 
 def run_jules(args):
     result = subprocess.run(
@@ -57,52 +61,69 @@ def start_health_server():
 
 
 async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global auth_proc, waiting_for_code
+
     if update.effective_user.id != ALLOWED_USER_ID:
         return
 
-    await update.message.reply_text("Starting Jules auth — one sec...")
+    await update.message.reply_text("Starting Jules auth...")
 
-    proc = await asyncio.create_subprocess_exec(
+    auth_proc = await asyncio.create_subprocess_exec(
         'jules', 'login', '--no-launch-browser',
+        stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
 
+    # Read output until we get the URL
     output_lines = []
     try:
-        async for line in proc.stdout:
+        async for line in auth_proc.stdout:
             line_str = line.decode().strip()
             if line_str:
                 output_lines.append(line_str)
-            if any('http' in l or 'code' in l.lower() for l in output_lines) and len(output_lines) >= 2:
+            if any('http' in l for l in output_lines) and len(output_lines) >= 2:
                 break
     except Exception as e:
-        await update.message.reply_text(f"Error reading auth output: {e}")
+        await update.message.reply_text(f"Error: {e}")
         return
 
     if output_lines:
+        waiting_for_code = True
         await update.message.reply_text(
-            "Open this URL and sign in with Google:\n\n" + '\n'.join(output_lines) +
-            "\n\nOnce authorized, Jules will authenticate automatically."
+            "1. Open this URL and sign in with Google:\n\n" +
+            '\n'.join(output_lines) +
+            "\n\n2. Copy the verification code Google gives you and paste it here."
         )
     else:
-        await update.message.reply_text("No output — Jules may already be authenticated. Try sending a task.")
-        proc.kill()
-        return
-
-    try:
-        await asyncio.wait_for(proc.wait(), timeout=120)
-        await update.message.reply_text("Jules is authenticated! Send me a task.")
-    except asyncio.TimeoutError:
-        proc.kill()
-        await update.message.reply_text("Auth timed out. Try /auth again.")
+        await update.message.reply_text("Jules may already be authenticated. Try sending a task.")
+        auth_proc.kill()
+        auth_proc = None
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global auth_proc, waiting_for_code
+
     if update.effective_user.id != ALLOWED_USER_ID:
         return
 
     text = update.message.text.strip()
+
+    # Handle auth code entry
+    if waiting_for_code and auth_proc:
+        waiting_for_code = False
+        await update.message.reply_text("Submitting code to Jules...")
+        try:
+            auth_proc.stdin.write((text + '\n').encode())
+            await auth_proc.stdin.drain()
+            await asyncio.wait_for(auth_proc.wait(), timeout=30)
+            await update.message.reply_text("Jules is authenticated! Send me a task.")
+        except asyncio.TimeoutError:
+            await update.message.reply_text("Auth timed out. Try /auth again.")
+        finally:
+            auth_proc = None
+        return
+
     lower = text.lower()
 
     if lower in ('status', 'sessions', 'list'):
