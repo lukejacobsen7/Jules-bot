@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="714" height="180" viewBox="0 0 714 180" role="img" aria-label="Jules-bot">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f1113"/>
+      <stop offset="1" stop-color="#1b2126"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(10,10)">
+    <rect width="160" height="160" rx="36" fill="url(#g)"/>
+
+    <path d="M32 36 H128 a14 14 0 0 1 14 14 V96 a14 14 0 0 1 -14 14 H74 L52 130 V110 H32 a14 14 0 0 1 -14 -14 V50 a14 14 0 0 1 14 -14 Z"
+          fill="#2BD9FF" opacity="0.10"/>
+    <path d="M32 36 H128 a14 14 0 0 1 14 14 V96 a14 14 0 0 1 -14 14 H74 L52 130 V110 H32 a14 14 0 0 1 -14 -14 V50 a14 14 0 0 1 14 -14 Z"
+          fill="none" stroke="#2BD9FF" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M44 58 L62 73 L44 88" fill="none" stroke="#2BD9FF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M74 88 H112" stroke="#FFB74D" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <text x="200" y="92" font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif" font-size="66" font-weight="700" fill="#141414" letter-spacing="-2">jules<tspan fill="#0FA3C4">bot</tspan></text>
+  <text x="203" y="134" font-family="-apple-system, 'SF Pro Text', 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif" font-size="22" fill="#6B6B6B">start a Google Jules session from your phone</text>
+</svg>
